@@ -12,6 +12,7 @@
 import os
 import re
 import sys
+import time
 import base64
 import requests
 
@@ -129,8 +130,8 @@ def download_image(token, att):
     raise RuntimeError("图片下载失败：附件里没有可用的下载地址")
 
 
-def call_gemini(image_bytes, mime_type, prompt):
-    """把图片发给 Gemini 视觉模型，返回识别文本"""
+def call_gemini(image_bytes, mime_type, prompt, retries=4):
+    """把图片发给 Gemini 视觉模型，返回识别文本（带重试）"""
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}"
         f":generateContent?key={GEMINI_API_KEY}"
@@ -150,9 +151,18 @@ def call_gemini(image_bytes, mime_type, prompt):
             }
         ]
     }
-    r = requests.post(url, json=body, timeout=120)
-    r.raise_for_status()
-    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+    last_err = None
+    for attempt in range(retries):
+        r = requests.post(url, json=body, timeout=120)
+        if r.ok:
+            try:
+                return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception:
+                raise RuntimeError(f"Gemini 响应解析失败: {r.text[:300]}")
+        last_err = f"Gemini {r.status_code}: {r.text[:500]}"
+        print(f"[重试 {attempt + 1}/{retries}] {last_err}")
+        time.sleep(3 * (attempt + 1))
+    raise RuntimeError(last_err)
 
 
 def build_prompt(meal):
