@@ -1,14 +1,14 @@
 name: Feishu-Bitable-Gemini
 
 on:
-  # 定时自动扫描（最轻量方案）：每 5 分钟处理一次「卡路里为空」的记录，无需按钮/HTTP
-  schedule:
-    - cron: "*/5 * * * *"
-  # 飞书按钮即时触发（可选，想保留"点一下立刻处理"就留着；不需要可以删掉）
+  # 飞书多维表格「按钮字段」→ 自动化流程 → GitHub API 唤醒（按需、实时）
   repository_dispatch:
     types: [feishu_bitable]
   # 手动触发，用于测试
   workflow_dispatch:
+  # 想恢复自动轮询？取消下面三行注释（GitHub 的 cron 使用 UTC 时间）：
+  # schedule:
+  #   - cron: "*/10 * * * *"
 
 jobs:
   gemini:
