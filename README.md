@@ -69,27 +69,43 @@ FIELD_PAIRS = [
 
 3. 去 **Actions** 页手动运行一次 `Feishu-Bitable-Gemini` 验证。在表格里加一行「图片 + 空卡路里」，运行后应能看到回填。
 
-## 五、两种触发方式
+## 五、触发方式：多维表格「按钮字段」手动识别（推荐）
 
-### 方式 A（推荐，实时）：飞书自动化流程 → Webhook → GitHub
+点按钮才识别，手动可控。需要**两个按钮 + 两个自动化流程**。
 
-1. 创建 GitHub Token：GitHub 头像 → **Settings → Developer settings → Personal access tokens**，建议用 **Fine-grained token**，仅授权 `soiquitmusic/dailyfood` 仓库，权限勾选 **Actions: Read and write**。（用经典 Classic token 则勾 `repo` 即可。）
-2. 打开飞书多维表格 → **自动化流程** → 新建：
-   - 触发条件：**记录创建时**（或「字段更新时」）
-   - 添加节点：**发送 HTTP 请求**
+### 0. 创建 GitHub Token（先做一次）
+
+GitHub 头像 → **Settings → Developer settings → Personal access tokens**，建议用 **Fine-grained token**：仅授权 `soiquitmusic/dailyfood` 仓库，权限勾选 **Actions: Read and write**（用经典 Classic token 则勾 `repo` 即可）。这个 Token 用来让飞书触发 GitHub 的 workflow。
+
+### 1. 加按钮字段
+
+在表格里添加两个**按钮字段**，例如「识别午餐」「识别晚餐」。
+
+### 2. 给每个按钮各建一个自动化流程
+
+以「识别午餐」按钮为例：
+
+1. 点按钮字段 → **设置按钮** → 新建自动化流程
+2. 触发条件：**按钮被点击**（选中「识别午餐」这个按钮）
+3. 添加节点：**发送 HTTP 请求**
    - 请求方式：`POST`
    - 地址：`https://api.github.com/repos/soiquitmusic/dailyfood/dispatches`
    - 请求头：
      - `Authorization: Bearer <你的 GitHub Token>`
      - `Accept: application/vnd.github+json`
-   - 请求体：`{"event_type":"feishu_bitable"}`
-3. 保存后新建一条带图片的记录测试。**如果飞书的「发送 HTTP 请求」节点不支持自定义 Header，此方式不可用，请改用方式 B**（脚本幂等，切到 B 也不会重复处理）。
+   - 请求体（午餐按钮）：
+     ```json
+     {"event_type":"feishu_bitable","client_payload":{"meal":"午餐"}}
+     ```
+4. 「识别晚餐」按钮的自动化流程，请求体把 `meal` 改成 `"晚餐"`。
 
-### 方式 B（兜底）：定时轮询
+点哪个按钮，就只识别那一餐、只回填对应的卡路里字段，互不影响。
 
-不需要任何飞书配置。工作流里已内置每 10 分钟自动扫描一次。注意：
-- GitHub cron 用 **UTC** 时间，`*/10 * * * *` 表示每 10 分钟一次。
-- 公开仓库 Actions 免费额度充足；若仓库设为私有，免费分钟约 2000/月，10 分钟一次会超，建议把 cron 改成 `*/30`。
+> ⚠️ 前提：飞书的「发送 HTTP 请求」节点要支持**自定义 Header**（新版支持）。如果不支持，此方案不可用，可退回到自动轮询（见下）。
+
+### 想恢复自动轮询？
+
+把 [gemini-bitable.yml](.github/workflows/gemini-bitable.yml) 里注释掉的 `schedule` 段取消注释即可（GitHub cron 用 UTC 时间）。注意自动模式会处理所有「卡路里为空」的行，与按钮手动模式并存。
 
 ---
 

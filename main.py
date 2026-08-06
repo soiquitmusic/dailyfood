@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-"""飞书多维表格 + Gemini 卡路里识别（由 GitHub Actions 定时运行）
+"""飞书多维表格 + Gemini 卡路里识别（由 GitHub Actions 运行）
 
 流程：
 1. 查找多维表格里「午餐/晚餐卡路里」为空、且对应图片字段有内容的记录
 2. 下载图片 → base64 → 发给 Gemini 视觉模型识别
-3. 把卡路里分析结果写回对应字段
+3. 把卡路里分析结果（数字）写回对应字段
+
+可选环境变量 MEAL：只处理指定餐次（如 "午餐"），用于飞书按钮字段触发。
 """
 
 import os
@@ -27,6 +29,14 @@ FIELD_PAIRS = [
     ("晚餐图片", "晚餐卡路里", "晚餐"),
 ]
 MODEL = "gemini-2.5-flash"
+
+
+def active_pairs():
+    """本次要处理的字段组；设置了 MEAL 环境变量时只处理对应餐次"""
+    meal = os.environ.get("MEAL", "").strip()
+    if meal:
+        return [p for p in FIELD_PAIRS if p[2] == meal]
+    return FIELD_PAIRS
 
 
 def build_prompt(meal):
@@ -58,8 +68,9 @@ def get_tenant_token():
 
 def build_filter():
     """生成筛选条件：任一餐（图片非空 且 结果为空）的记录都要处理"""
+    pairs = active_pairs()
     groups = []
-    for input_field, output_field, _ in FIELD_PAIRS:
+    for input_field, output_field, _ in pairs:
         groups.append(
             {
                 "conjunction": "and",
@@ -168,7 +179,7 @@ def main():
     for rec in records:
         record_id = rec.get("record_id")
         fields = rec.get("fields") or {}
-        for input_field, output_field, meal in FIELD_PAIRS:
+        for input_field, output_field, meal in active_pairs():
             atts = fields.get(input_field) or []
             if not atts:
                 continue

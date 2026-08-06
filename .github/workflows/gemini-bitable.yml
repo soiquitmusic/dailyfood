@@ -1,14 +1,14 @@
 name: Feishu-Bitable-Gemini
 
 on:
-  # ① 实时触发（方式A）：飞书自动化流程 Webhook → GitHub API 唤醒
+  # 飞书多维表格「按钮字段」→ 自动化流程 → GitHub API 唤醒（按需、实时）
   repository_dispatch:
     types: [feishu_bitable]
-  # ② 兜底：定时轮询（注意 GitHub 的 cron 使用 UTC 时间）
-  schedule:
-    - cron: "*/10 * * * *"
-  # ③ 手动触发，用于测试
+  # 手动触发，用于测试
   workflow_dispatch:
+  # 想恢复自动轮询？取消下面三行注释（GitHub 的 cron 使用 UTC 时间）：
+  # schedule:
+  #   - cron: "*/10 * * * *"
 
 jobs:
   gemini:
@@ -31,3 +31,5 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BITABLE_APP_TOKEN: ${{ secrets.BITABLE_APP_TOKEN }}
           BITABLE_TABLE_ID: ${{ secrets.BITABLE_TABLE_ID }}
+          # 飞书按钮的自动化流程通过 client_payload 传入，限定只处理某一餐（如 午餐/晚餐）
+          MEAL: ${{ github.event.client_payload.meal }}
