@@ -1,0 +1,33 @@
+name: Feishu-Bitable-Gemini
+
+on:
+  # ① 实时触发（方式A）：飞书自动化流程 Webhook → GitHub API 唤醒
+  repository_dispatch:
+    types: [feishu_bitable]
+  # ② 兜底：定时轮询（注意 GitHub 的 cron 使用 UTC 时间）
+  schedule:
+    - cron: "*/10 * * * *"
+  # ③ 手动触发，用于测试
+  workflow_dispatch:
+
+jobs:
+  gemini:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 识别卡路里并回填多维表格
+        run: python main.py
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BITABLE_APP_TOKEN: ${{ secrets.BITABLE_APP_TOKEN }}
+          BITABLE_TABLE_ID: ${{ secrets.BITABLE_TABLE_ID }}
