@@ -31,6 +31,8 @@ FIELD_PAIRS = [
 ]
 # 依次尝试的模型：某个模型负载过高(503)时自动换下一个
 MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash"]
+# Gemini 最多等这么久（秒），超时没成功就切到 Qwen
+GEMINI_TIMEOUT_SEC = 60
 # Qwen 视觉模型（后备）：需要环境变量 QWEN_API_KEY
 QWEN_MODEL = "qwen-vl-plus"
 
@@ -134,9 +136,9 @@ def download_image(token, att):
 
 
 def call_gemini(image_bytes, mime_type, prompt):
-    """把图片发给 Gemini 视觉模型，返回识别文本。
+    """把图片发给 Gemini 视觉模型。
 
-    依次尝试 MODELS 里的模型，某个模型 503/404 时自动换下一个。
+    限时 GEMINI_TIMEOUT_SEC 秒：轮换尝试各模型，超时仍未成功则抛错，由调用方切到 Qwen。
     """
     body = {
         "contents": [
@@ -153,23 +155,33 @@ def call_gemini(image_bytes, mime_type, prompt):
             }
         ]
     }
+    deadline = time.time() + GEMINI_TIMEOUT_SEC
     last_err = None
-    for model in MODELS:
+    model_idx = 0
+    while time.time() < deadline:
+        model = MODELS[model_idx % len(MODELS)]
+        model_idx += 1
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
             f":generateContent?key={GEMINI_API_KEY}"
         )
-        for attempt in range(3):
-            r = requests.post(url, json=body, timeout=120)
-            if r.ok:
-                try:
-                    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-                except Exception:
-                    raise RuntimeError(f"Gemini 响应解析失败: {r.text[:300]}")
-            last_err = f"Gemini {model} {r.status_code}: {r.text[:300]}"
-            print(f"[{model} 第{attempt + 1}次] {last_err}")
-            time.sleep(2)
-    raise RuntimeError(last_err)
+        # 单次请求超时不超过剩余时间，避免卡死在 120s
+        remaining = max(10, int(deadline - time.time()))
+        try:
+            r = requests.post(url, json=body, timeout=remaining)
+        except requests.RequestException as e:
+            last_err = f"Gemini {model} 请求异常: {e}"
+            print(f"[Gemini {model}] {last_err}")
+            continue
+        if r.ok:
+            try:
+                return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception:
+                raise RuntimeError(f"Gemini 响应解析失败: {r.text[:300]}")
+        last_err = f"Gemini {model} {r.status_code}: {r.text[:200]}"
+        print(f"[Gemini {model}] {last_err}")
+        time.sleep(2)
+    raise RuntimeError(f"Gemini 在 {GEMINI_TIMEOUT_SEC} 秒内未成功: {last_err}")
 
 
 def call_qwen(image_bytes, mime_type, prompt):
