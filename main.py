@@ -31,6 +31,8 @@ FIELD_PAIRS = [
 ]
 # 依次尝试的模型：某个模型负载过高(503)时自动换下一个
 MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash"]
+# Qwen 视觉模型（后备）：需要环境变量 QWEN_API_KEY
+QWEN_MODEL = "qwen-vl-plus"
 
 
 def active_pairs():
@@ -170,6 +172,45 @@ def call_gemini(image_bytes, mime_type, prompt):
     raise RuntimeError(last_err)
 
 
+def call_qwen(image_bytes, mime_type, prompt):
+    """把图片发给通义千问-VL 视觉模型（OpenAI 兼容接口）"""
+    api_key = os.environ.get("QWEN_API_KEY")
+    if not api_key:
+        raise RuntimeError("未配置 QWEN_API_KEY")
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    body = {
+        "model": QWEN_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{b64}"},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+        "temperature": 0.1,
+    }
+    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    r = requests.post(url, headers=headers, json=body, timeout=120)
+    if not r.ok:
+        raise RuntimeError(f"Qwen {r.status_code}: {r.text[:300]}")
+    return r.json()["choices"][0]["message"]["content"]
+
+
+def call_vision(image_bytes, mime_type, prompt):
+    """识别入口：先试 Gemini 多模型，失败后切到 Qwen"""
+    try:
+        return call_gemini(image_bytes, mime_type, prompt)
+    except Exception as e:
+        print(f"Gemini 全部失败，切换到 Qwen：{e}")
+        return call_qwen(image_bytes, mime_type, prompt)
+
+
 def build_prompt(meal):
     return (
         f"请识别这张{meal}图片中的食物并估算总热量。"
@@ -225,7 +266,7 @@ def main():
                 continue
             try:
                 image_bytes, mime = download_image(token, atts[0])
-                result = call_gemini(image_bytes, mime, build_prompt(meal))
+                result = call_vision(image_bytes, mime, build_prompt(meal))
                 kcal = parse_kcal(result)  # 转成数字，方便表格自动求和
                 update_record(token, record_id, output_field, kcal)
                 ok += 1

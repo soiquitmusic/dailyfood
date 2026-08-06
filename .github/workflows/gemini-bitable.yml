@@ -29,6 +29,7 @@ jobs:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
           BITABLE_APP_TOKEN: ${{ secrets.BITABLE_APP_TOKEN }}
           BITABLE_TABLE_ID: ${{ secrets.BITABLE_TABLE_ID }}
           # 飞书按钮的自动化流程通过 client_payload 传入，限定只处理某一餐（如 午餐/晚餐）
