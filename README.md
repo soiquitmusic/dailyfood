@@ -57,13 +57,14 @@ FIELD_PAIRS = [
    git remote add origin https://github.com/soiquitmusic/dailyfood.git
    git push -u origin main
    ```
-2. 仓库 **Settings → Secrets and variables → Actions** 添加以下 5 个 Secret：
+2. 仓库 **Settings → Secrets and variables → Actions** 添加以下 6 个 Secret：
 
    | Secret 名 | 值 |
    |---|---|
    | `FEISHU_APP_ID` | 飞书应用的 App ID |
    | `FEISHU_APP_SECRET` | 飞书应用的 App Secret |
-   | `GEMINI_API_KEY` | Google AI Studio 生成的 Key |
+   | `GEMINI_API_KEY` | Google AI Studio 生成的 Key（可选，没额度会走 Qwen） |
+   | `QWEN_API_KEY` | 阿里云百炼的 DashScope API Key（`sk-...`） |
    | `BITABLE_APP_TOKEN` | 表格链接里的 bascnXXX |
    | `BITABLE_TABLE_ID` | 表格链接里的 tblXXX |
 
