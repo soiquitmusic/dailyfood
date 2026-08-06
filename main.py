@@ -102,9 +102,11 @@ def find_pending_records(token):
     return pending
 
 
-def download_image(att):
+def download_image(token, att):
     """下载附件图片，返回 (二进制内容, mime_type)"""
-    content = None
+    print("附件结构:", att)  # 调试：看附件里有哪些字段
+
+    # 方式1：直接用返回的 url / tmp_url（image 类型通常带 url）
     for key in ("tmp_url", "url"):
         u = att.get(key)
         if not u:
@@ -112,15 +114,19 @@ def download_image(att):
         try:
             r = requests.get(u, timeout=60)
             if r.status_code == 200 and r.content:
-                content = r.content
-                break
+                return r.content, att.get("mime_type") or "image/jpeg"
         except requests.RequestException:
             continue
-    if content is None:
-        raise RuntimeError("图片下载失败")
 
-    mime = att.get("mime_type") or "image/jpeg"
-    return content, mime
+    # 方式2：用云空间下载接口（需 file_token + 租户 token）
+    file_token = att.get("file_token")
+    if file_token:
+        url = f"https://open.feishu.cn/open-apis/drive/v1/files/{file_token}/download"
+        r = api_request("GET", url, token)
+        mime = (r.headers.get("Content-Type") or "").split(";")[0] or "image/jpeg"
+        return r.content, mime
+
+    raise RuntimeError("图片下载失败：附件里没有 url/file_token")
 
 
 def call_gemini(image_bytes, mime_type, prompt):
@@ -203,7 +209,7 @@ def main():
             if fields.get(output_field) not in (None, ""):
                 continue
             try:
-                image_bytes, mime = download_image(atts[0])
+                image_bytes, mime = download_image(token, atts[0])
                 result = call_gemini(image_bytes, mime, build_prompt(meal))
                 kcal = parse_kcal(result)  # 转成数字，方便表格自动求和
                 update_record(token, record_id, output_field, kcal)
