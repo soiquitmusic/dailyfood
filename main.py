@@ -105,28 +105,28 @@ def find_pending_records(token):
 def download_image(token, att):
     """下载附件图片，返回 (二进制内容, mime_type)"""
     print("附件结构:", att)  # 调试：看附件里有哪些字段
+    auth = {"Authorization": f"Bearer {token}"}
 
-    # 方式1：直接用返回的 url / tmp_url（image 类型通常带 url）
-    for key in ("tmp_url", "url"):
-        u = att.get(key)
+    # 方式1：附件自带的下载地址是飞书 API，需要带租户 token
+    for u in (att.get("url"), att.get("tmp_url")):
         if not u:
             continue
         try:
-            r = requests.get(u, timeout=60)
+            r = requests.get(u, headers=auth, timeout=60)
             if r.status_code == 200 and r.content:
                 return r.content, att.get("mime_type") or "image/jpeg"
         except requests.RequestException:
             continue
 
-    # 方式2：用云空间下载接口（需 file_token + 租户 token）
+    # 方式2：兜底，用云空间 medias 下载接口（需 file_token + 租户 token）
     file_token = att.get("file_token")
     if file_token:
-        url = f"https://open.feishu.cn/open-apis/drive/v1/files/{file_token}/download"
+        url = f"https://open.feishu.cn/open-apis/drive/v1/medias/{file_token}/download"
         r = api_request("GET", url, token)
         mime = (r.headers.get("Content-Type") or "").split(";")[0] or "image/jpeg"
         return r.content, mime
 
-    raise RuntimeError("图片下载失败：附件里没有 url/file_token")
+    raise RuntimeError("图片下载失败：附件里没有可用的下载地址")
 
 
 def call_gemini(image_bytes, mime_type, prompt):
